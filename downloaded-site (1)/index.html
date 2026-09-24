@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <script src="/assets/rgc-online.js?v=20260917-on2"></script>
+    <script src="/assets/jsdos-cloud-sdk.js?v=20260904-cloud6"></script>
+    <script src="/assets/rgc-cloud-saves.js?v=20260904-cloud6"></script>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+	<meta http-equiv="Pragma" content="no-cache">
+	<meta http-equiv="Expires" content="0">
+<title>DOOM в браузере</title>
+	<link rel="stylesheet" href="css/fonts.css?v=4.2.3">
+	<script src="https://telegram.org/js/telegram-web-app.js"></script>
+	<script>
+// Проверяем, что приложение открыто через Telegram Web App
+if (window.Telegram && window.Telegram.WebApp) {
+    const tg = window.Telegram.WebApp;
+    
+    // Готовим приложение
+    tg.ready();
+    
+    // Автоматически разворачиваем (для мобильных)
+    tg.expand();
+    
+    // Запрашиваем полноэкранный режим (Bot API 8.0+)
+    if (tg.requestFullscreen) {
+        tg.requestFullscreen();
+    }
+    
+    // Настраиваем цвета
+    tg.setHeaderColor('#000000');
+    tg.setBackgroundColor('#000000');
+}
+</script>
+	<script src="/assets/rgc-achievements.js" defer></script>
+	<style>
+		:root {
+			color-scheme: dark;
+			user-select: none;
+			-webkit-user-select: none;
+			-webkit-touch-callout: none;
+			-webkit-tap-highlight-color: transparent;
+		}
+
+		html, body {
+			height: 100%;
+			margin: 0;
+			padding: 0;
+			background: #000;
+			color: #f2f2f2;
+			font-family: "DooM", "Segoe UI", sans-serif;
+			overflow: hidden;
+			user-select: none;
+			-webkit-user-select: none;
+			-moz-user-select: none;
+			-ms-user-select: none;
+			touch-action: none;
+			-webkit-touch-callout: none;
+			-webkit-text-size-adjust: none;
+			text-size-adjust: none;
+		}
+
+		body {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			min-height: 100vh;
+			box-sizing: border-box;
+			gap: 24px;
+			overscroll-behavior: none;
+			-webkit-overflow-scrolling: touch;
+			padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+		}
+
+		.hidden {
+			display: none !important;
+		}
+
+		#game-select {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 24px;
+			text-align: center;
+			padding: 24px 16px;
+			width: 100%;
+			height: 100vh;
+			min-height: 100vh;
+			box-sizing: border-box;
+			overflow: hidden;
+		}
+
+		.game-grid {
+			display: flex;
+			flex-wrap: wrap;
+			justify-content: center;
+			align-items: center;
+			gap: 20px;
+		}
+
+		.game-card {
+			background: none;
+			border: none;
+			padding: 0;
+			margin: 0;
+			cursor: pointer;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 12px;
+			color: inherit;
+			font: inherit;
+			touch-action: manipulation;
+		}
+
+		.game-card img {
+			width: min(220px, 42vw);
+			height: auto;
+			display: block;
+			border-radius: 16px;
+			box-shadow: 0 0 20px rgba(255, 0, 0, 0.35);
+			background: rgba(0, 0, 0, 0.35);
+			transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+		}
+
+		.game-card:focus-visible img,
+		.game-card:hover img {
+			transform: scale(1.05);
+			box-shadow: 0 0 26px rgba(255, 90, 90, 0.6);
+			opacity: 0.92;
+		}
+
+		#doom-wrapper {
+			position: relative;
+			aspect-ratio: 4 / 3;
+			height: min(calc(100vh - 48px), calc((100vw - 32px) * 3 / 4));
+			max-height: calc(100vh - 48px);
+			max-width: min(960px, calc(100vw - 32px));
+			width: auto;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			border: none !important;
+			outline: none !important;
+			box-shadow: none !important;
+		}
+
+		#doom-wrapper.hidden {
+			display: none;
+		}
+
+		#doom-wrapper.fullscreen {
+			position: fixed;
+			top: 0;
+			left: 0;
+			width: 100vw;
+			height: 100vh;
+			max-width: 100vw;
+			max-height: 100vh;
+			z-index: 9999;
+			background: #000;
+			border: none !important;
+			outline: none !important;
+		}
+
+		canvas#doom-canvas {
+			width: 100%;
+			height: 100%;
+			image-rendering: pixelated;
+			image-rendering: crisp-edges;
+			cursor: crosshair;
+			border: none !important;
+			outline: none !important;
+			display: block;
+		}
+
+		#status {
+			position: absolute;
+			inset: 12px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			text-align: center;
+			padding: 12px 16px;
+			background: rgba(0, 0, 0, 0.65);
+			border: 1px solid rgba(255, 255, 255, 0.15);
+			border-radius: 6px;
+			backdrop-filter: blur(2px);
+			font-size: 13px;
+			line-height: 1.6;
+			transition: opacity 0.3s ease;
+			pointer-events: none;
+		}
+
+		#status.hidden {
+			opacity: 0;
+			pointer-events: none;
+		}
+
+		#controls {
+			position: absolute;
+			top: 12px;
+			left: 12px;
+			display: flex;
+			gap: 8px;
+			z-index: 1000;
+		}
+
+		.control-btn {
+			background: rgba(0, 0, 0, 0.65);
+			border: 1px solid rgba(255, 255, 255, 0.15);
+			border-radius: 6px;
+			color: #f2f2f2;
+			padding: 8px 12px;
+			cursor: pointer;
+			backdrop-filter: blur(2px);
+			font-size: 14px;
+			transition: all 0.2s ease;
+			touch-action: manipulation;
+		}
+
+		.control-btn:hover {
+			background: rgba(0, 0, 0, 0.8);
+			border-color: rgba(255, 255, 255, 0.3);
+		}
+
+		a {
+			color: #ff5148;
+		}
+
+		/* Стили для Telegram Web App */
+		body.telegram-webapp {
+			padding-top: env(safe-area-inset-top);
+			padding-bottom: env(safe-area-inset-bottom);
+			padding-left: env(safe-area-inset-left);
+			padding-right: env(safe-area-inset-right);
+		}
+
+		/* Запрет выделения и действий по умолчанию */
+		* {
+			-webkit-tap-highlight-color: transparent;
+			-webkit-touch-callout: none;
+			-webkit-user-select: none;
+			user-select: none;
+		}
+
+		/* Разрешаем touch-action для интерактивных элементов */
+		.game-card, .control-btn, button {
+			touch-action: manipulation;
+		}
+
+		@media (max-width: 768px) {
+			#controls {
+				top: calc(12px + env(safe-area-inset-top));
+				left: calc(12px + env(safe-area-inset-left));
+			}
+		}
+	</style>
+</head>
+<body>
+	<div id="game-select">
+		<div class="game-grid">
+			<button class="game-card" data-game="doom1" data-wad="doom1.wad" data-label="DOOM">
+				<img src="css/doom1.png" alt="DOOM">
+			</button>
+			<button class="game-card" data-game="doom2" data-wad="doom2.wad" data-label="DOOM II">
+				<img src="css/doom2.png" alt="DOOM II">
+			</button>
+		</div>
+	</div>
+
+	<div id="doom-wrapper" class="hidden">
+		<canvas id="doom-canvas" width="640" height="480"></canvas>
+		<div id="status" class="hidden">Загрузка ресурсов...</div>
+		<div id="controls">
+			<button id="fullscreen-btn" class="control-btn hidden" title="Полноэкранный режим">⛶</button>
+			<button id="exit-fullscreen-btn" class="control-btn hidden" title="Выйти из полноэкранного режима">✕</button>
+		</div>
+	</div>
+
+	<script>
+		// Инициализация Telegram Web App
+		let tg = null;
+		if (window.Telegram && window.Telegram.WebApp) {
+			tg = window.Telegram.WebApp;
+			tg.expand();
+			tg.enableClosingConfirmation();
+			document.body.classList.add('telegram-webapp');
+			
+			// Настройка цветовой схемы Telegram
+			tg.headerColor = tg.themeParams.bg_color || '#000000';
+			tg.backgroundColor = tg.themeParams.bg_color || '#000000';
+		}
+
+		const statusElement = document.getElementById('status');
+		const canvas = document.getElementById('doom-canvas');
+		const gameSelect = document.getElementById('game-select');
+		const doomWrapper = document.getElementById('doom-wrapper');
+		const gameButtons = document.querySelectorAll('.game-card');
+		const fullscreenBtn = document.getElementById('fullscreen-btn');
+		const exitFullscreenBtn = document.getElementById('exit-fullscreen-btn');
+		
+		let selectedWadPath = null;
+		let selectedGameLabel = '';
+		let engineScriptInjected = false;
+		let isFullscreen = false;
+
+		// Функции для блокировки жестов и скролла
+		function setupEventBlocking() {
+			// Блокировка контекстного меню
+			document.addEventListener('contextmenu', function(e) {
+				e.preventDefault();
+				return false;
+			});
+
+			// Блокировка жестов масштабирования
+			document.addEventListener('gesturestart', function(e) {
+				e.preventDefault();
+			});
+			
+			document.addEventListener('gesturechange', function(e) {
+				e.preventDefault();
+			});
+			
+			document.addEventListener('gestureend', function(e) {
+				e.preventDefault();
+			});
+
+			// Блокировка скролла на неинтерактивных элементах
+			document.addEventListener('touchmove', function(e) {
+				// Разрешаем события на интерактивных элементах
+				if (e.target.closest('button') || e.target.closest('canvas') || e.target.closest('.game-card') || e.target.closest('.control-btn')) {
+					return;
+				}
+				e.preventDefault();
+			}, { passive: false });
+
+			// Блокировка выделения текста
+			document.addEventListener('selectstart', function(e) {
+				e.preventDefault();
+			});
+
+			// Блокировка двойного клика
+			document.addEventListener('dblclick', function(e) {
+				e.preventDefault();
+			});
+		}
+
+		// Функции для полноэкранного режима
+		function enterFullscreen() {
+			const element = doomWrapper;
+			
+			if (element.requestFullscreen) {
+				element.requestFullscreen();
+			} else if (element.webkitRequestFullscreen) {
+				element.webkitRequestFullscreen();
+			} else if (element.msRequestFullscreen) {
+				element.msRequestFullscreen();
+			} else {
+				// Fallback для браузеров без поддержки Fullscreen API
+				doomWrapper.classList.add('fullscreen');
+				isFullscreen = true;
+				updateFullscreenButtons();
+				lockScreenOrientation();
+			}
+		}
+
+		function exitFullscreen() {
+			if (document.exitFullscreen) {
+				document.exitFullscreen();
+			} else if (document.webkitExitFullscreen) {
+				document.webkitExitFullscreen();
+			} else if (document.msExitFullscreen) {
+				document.msExitFullscreen();
+			} else {
+				// Fallback для браузеров без поддержки Fullscreen API
+				doomWrapper.classList.remove('fullscreen');
+				isFullscreen = false;
+				updateFullscreenButtons();
+				unlockScreenOrientation();
+			}
+		}
+
+		function toggleFullscreen() {
+			if (isFullscreen) {
+				exitFullscreen();
+			} else {
+				enterFullscreen();
+			}
+		}
+
+		function updateFullscreenButtons() {
+			if (isFullscreen) {
+				fullscreenBtn.classList.add('hidden');
+				exitFullscreenBtn.classList.remove('hidden');
+			} else {
+				fullscreenBtn.classList.remove('hidden');
+				exitFullscreenBtn.classList.add('hidden');
+			}
+		}
+
+		// Блокировка ориентации экрана (для мобильных устройств)
+		function lockScreenOrientation() {
+			if (screen.orientation && screen.orientation.lock) {
+				screen.orientation.lock('landscape').catch(function(error) {
+					console.log('Ориентация экрана не может быть заблокирована: ', error);
+				});
+			} else if (screen.lockOrientation) {
+				screen.lockOrientation('landscape');
+			} else if (screen.mozLockOrientation) {
+				screen.mozLockOrientation('landscape');
+			} else if (screen.msLockOrientation) {
+				screen.msLockOrientation('landscape');
+			}
+		}
+
+		function unlockScreenOrientation() {
+			if (screen.orientation && screen.orientation.unlock) {
+				screen.orientation.unlock();
+			} else if (screen.unlockOrientation) {
+				screen.unlockOrientation();
+			} else if (screen.mozUnlockOrientation) {
+				screen.mozUnlockOrientation();
+			} else if (screen.msUnlockOrientation) {
+				screen.msUnlockOrientation();
+			}
+		}
+
+		// Обработчики событий полноэкранного режима
+		document.addEventListener('fullscreenchange', handleFullscreenChange);
+		document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+		document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+		document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+		function handleFullscreenChange() {
+			isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || 
+							document.mozFullScreenElement || document.msFullscreenElement);
+			updateFullscreenButtons();
+			
+			if (isFullscreen) {
+				doomWrapper.classList.add('fullscreen');
+				lockScreenOrientation();
+			} else {
+				doomWrapper.classList.remove('fullscreen');
+				unlockScreenOrientation();
+			}
+		}
+
+		fullscreenBtn.addEventListener('click', enterFullscreen);
+		exitFullscreenBtn.addEventListener('click', exitFullscreen);
+
+		// Глобальные обработчики клавиш для полноэкранного режима
+		document.addEventListener('keydown', function(event) {
+			// F11 для переключения полноэкранного режима
+			if (event.key === 'F11') {
+				event.preventDefault();
+				toggleFullscreen();
+			}
+			
+			// Escape для выхода из полноэкранного режима
+			if (event.key === 'Escape' && isFullscreen) {
+				event.preventDefault();
+				exitFullscreen();
+			}
+		});
+
+		canvas.addEventListener('contextmenu', function (event) {
+			event.preventDefault();
+			return false;
+		});
+
+		// Запрет перетаскивания и выделения на canvas
+		canvas.addEventListener('dragstart', function(e) {
+			e.preventDefault();
+			return false;
+		});
+
+		canvas.addEventListener('drop', function(e) {
+			e.preventDefault();
+			return false;
+		});
+
+		function hideStatusLater(delay = 0) {
+			const hide = () => statusElement.classList.add('hidden');
+			if (delay > 0) {
+				setTimeout(hide, delay);
+			} else {
+				requestAnimationFrame(hide);
+			}
+		}
+
+		function showReadyHint() {
+			hideStatusLater(0);
+			// Показываем кнопку полноэкранного режима после загрузки игры
+			fullscreenBtn.classList.remove('hidden');
+
+			// Достижения: считаем запуск, когда игра реально стартовала (а не на экране выбора)
+			try {
+				if (!window.__rgc_doom_started) {
+					window.__rgc_doom_started = true;
+					if (window.RGC && typeof window.RGC.trackGameLaunchFromEmulator === 'function') {
+						window.RGC.trackGameLaunchFromEmulator({
+							core: 'port',
+							gameUrl: selectedWadPath || selectedGameLabel || '',
+							gameId: window.__currentGame || document.body?.dataset?.currentGame || ''
+						});
+					}
+					if (window.RGC && typeof window.RGC.trackAchievementEvent === 'function') {
+						window.RGC.trackAchievementEvent('doom');
+					}
+				}
+			} catch (e) {}
+		}
+
+		function getModule() {
+			return window.Module || null;
+		}
+
+		function resumeAudioContext() {
+			const mod = getModule();
+			try {
+				const audioCtx = (mod && mod.SDL2 && mod.SDL2.audioContext) || (mod && mod.audioContext);
+				if (audioCtx && audioCtx.state === 'suspended') {
+					return audioCtx.resume().catch(() => {});
+				}
+			} catch (err) {
+				console.warn('Не удалось возобновить аудио контекст:', err);
+			}
+			return Promise.resolve();
+		}
+
+		function bindAudioUnlock() {
+			const unlock = () => {
+				resumeAudioContext().then(() => {
+					const mod = getModule();
+					const audioCtx = (mod && mod.SDL2 && mod.SDL2.audioContext) || (mod && mod.audioContext);
+					if (audioCtx && audioCtx.state === 'running') {
+						['pointerdown', 'keydown', 'touchend'].forEach(evt => window.removeEventListener(evt, unlock));
+					}
+				});
+			};
+			['pointerdown', 'keydown', 'touchend'].forEach(evt => window.addEventListener(evt, unlock, { passive: true }));
+			document.addEventListener('visibilitychange', () => {
+				if (!document.hidden) {
+					resumeAudioContext();
+				}
+			});
+		}
+
+		// Инициализация блокировки жестов при загрузке
+		setupEventBlocking();
+		bindAudioUnlock();
+
+		// Обработчики для кнопок выбора игры
+		gameButtons.forEach((button) => {
+			button.addEventListener('click', (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+				startGame(button.dataset.wad, button.dataset.label || '');
+			});
+
+			// Также добавляем обработчик для touchstart чтобы убедиться, что работает на мобильных
+			button.addEventListener('touchstart', (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+				startGame(button.dataset.wad, button.dataset.label || '');
+			}, { passive: false });
+		});
+
+		function startGame(wadPath, label) {
+			if (engineScriptInjected) {
+				return;
+			}
+			engineScriptInjected = true;
+			selectedWadPath = wadPath;
+			selectedGameLabel = label;
+			const currentGameId = Array.from(gameButtons).find(btn => btn.dataset.wad === wadPath)?.dataset.game || '';
+			document.body.dataset.currentGame = currentGameId;
+			window.__currentGame = currentGameId;
+			window.dispatchEvent(new CustomEvent('doom:gameSelected', { detail: { game: currentGameId } }));
+			gameSelect.classList.add('hidden');
+			doomWrapper.classList.remove('hidden');
+			statusElement.textContent = label ? `Загрузка ${label}...` : 'Загрузка ресурсов...';
+			statusElement.classList.remove('hidden');
+			
+			// Фокус на canvas для работы клавиатуры
+			canvas.focus();
+			
+			const moduleConfig = createModuleConfig(wadPath);
+			window.Module = moduleConfig;
+			injectEngineScript();
+		}
+
+		function createModuleConfig(wadPath) {
+			const wadLower = wadPath.toLowerCase();
+			const isDoom1 = wadLower.endsWith('doom1.wad') || wadLower.includes('doom1');
+			const moduleConfig = {
+				preRun: [],
+				postRun: [showReadyHint],
+				print: (function () {
+					return function (text) {
+						text = Array.isArray(text) ? text.join(' ') : text;
+						console.log(text);
+					};
+				})(),
+				printErr: function (text) {
+					console.error(text);
+				},
+				canvas: (function () {
+					canvas.setAttribute('tabindex', '-1');
+					canvas.focus();
+					return canvas;
+				})(),
+				setStatus: function (text) {
+				if (!text) {
+					showReadyHint();
+					return;
+				}
+				statusElement.classList.remove('hidden');
+				statusElement.textContent = text;
+				},
+				monitorRunDependencies: function (remaining) {
+					const mod = getModule();
+					if (remaining > 0) {
+						const total = mod && mod.expectedDataFileDownloads ? mod.expectedDataFileDownloads : 1;
+						const completed = total - remaining;
+						mod && mod.setStatus(`Загрузка ресурсов... (${completed}/${total})`);
+					} else {
+						mod && mod.setStatus('');
+					}
+				},
+				locateFile: function (path) {
+					if (path.endsWith('doom.wasm')) {
+						return 'js/doom.wasm';
+					}
+					if (path.endsWith('doom1.wad') || path.endsWith('DOOM.WAD')) {
+						return wadPath;
+					}
+					return path;
+				},
+				resumeAudioContext: resumeAudioContext
+			};
+
+			if (!isDoom1) {
+				const wadFileName = 'DOOM2.WAD';
+				moduleConfig.arguments = ['-iwad', wadFileName];
+				moduleConfig.preRun.push(function () {
+					const mod = getModule();
+					const dependencyId = 'doom2-wad';
+					mod.addRunDependency(dependencyId);
+					statusElement.classList.remove('hidden');
+					statusElement.textContent = 'Загрузка ' + (selectedGameLabel || 'игры') + '...';
+					const xhr = new XMLHttpRequest();
+					xhr.open('GET', wadPath, true);
+					xhr.responseType = 'arraybuffer';
+					xhr.onload = function () {
+						if (xhr.status >= 200 && xhr.status < 300 && xhr.response) {
+							const data = new Uint8Array(xhr.response);
+							try {
+								mod.FS.unlink('/' + wadFileName);
+							} catch (err) {
+								/* ignore */
+							}
+							mod.FS.writeFile('/' + wadFileName, data, { canOwn: true });
+							mod.removeRunDependency(dependencyId);
+						} else {
+							console.error('Не удалось загрузить ' + wadPath + ': ' + xhr.status);
+							statusElement.textContent = 'Ошибка загрузки WAD.';
+							mod.removeRunDependency(dependencyId);
+						}
+					};
+					xhr.onerror = function () {
+						console.error('Ошибка сети при загрузке ' + wadPath);
+						statusElement.textContent = 'Ошибка сети при загрузке WAD.';
+						mod.removeRunDependency(dependencyId);
+					};
+					xhr.send();
+				});
+			}
+
+			return moduleConfig;
+		}
+
+		function injectEngineScript() {
+			if (document.getElementById('doom-engine-script')) {
+				return;
+			}
+			const script = document.createElement('script');
+			script.id = 'doom-engine-script';
+			script.src = 'js/doom1.js';
+			script.onerror = function () {
+				engineScriptInjected = false;
+				gameSelect.classList.remove('hidden');
+				doomWrapper.classList.add('hidden');
+				statusElement.classList.remove('hidden');
+				statusElement.textContent = 'Не удалось загрузить движок.';
+			};
+			document.body.appendChild(script);
+		}
+
+		window.onerror = function (event) {
+			const mod = getModule();
+			if (mod && mod.printErr) {
+				mod.printErr('Ошибка исполнения: ' + event);
+			} else {
+				console.error('Ошибка исполнения: ' + event);
+			}
+			if (mod && mod.setStatus) {
+				mod.setStatus('Произошла ошибка выполнения. Проверьте консоль браузера.');
+			}
+		};
+
+		// Автоматический запуск для Telegram Web App (опционально)
+		if (tg && tg.initData) {
+			// Можно добавить логику автоматического запуска определенной игры в Telegram
+			console.log('Telegram Web App инициализирован', tg.initData);
+		}
+
+		// Дополнительные меры для блокировки нежелательного поведения
+		window.addEventListener('beforeunload', function() {
+			// Очистка при выходе
+			if (isFullscreen) {
+				exitFullscreen();
+			}
+		});
+	</script>
+	<script src="mobilecontrol1.js"></script>
+</body>
+</html>
